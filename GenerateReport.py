@@ -16,6 +16,7 @@ class GenerateReport:
             self.commentsAndReplies = None
 
         report = {
+            'youtube_link': self.current_url,
             'date && time': date_time,
             'pinned or from channeluser': self.channelComments,
             'comments and replies': self.commentsAndReplies

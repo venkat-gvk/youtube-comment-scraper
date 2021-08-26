@@ -1,4 +1,5 @@
 from selenium import webdriver
+from selenium.common.exceptions import NoSuchElementException
 from sys import exit
 import time
 
@@ -23,7 +24,7 @@ class Scraper:
         isComment = self.driver.find_element_by_xpath(
             "//ytd-comments/ytd-item-section-renderer/div[1]")
 
-        if isComment.text:
+        if isComment and isComment.text:
             commentInfo = self.driver.find_element_by_xpath(
                 '//*[@id="count"]/yt-formatted-string').text.split()
 
@@ -45,10 +46,11 @@ class Scraper:
         time.sleep(0.8)
 
         cont = el.find_element_by_xpath('//*[@id="continuation"]').text
+        
         if cont:
             reply = el.find_element_by_xpath(
                 '//*[@id="continuation"]/yt-next-continuation/paper-button')
-            self.loadNestedReplies(el, idx, el, reply)
+            self.loadNestedReplies(el, reply)
 
     # get nested replies
 
@@ -60,39 +62,43 @@ class Scraper:
 
             if not reply:
                 reply = False
+        
             if not heading.text:
-                result.append((self.channelName.upper(), reply))
+                result.append({self.channelName.upper():  reply})
             else:
-                result.append(('Shikai', reply))
+                result.append({'Shikai': reply})
 
         return result
 
     def extractReplies(self, container):
         print('Extracting replies...')
         all = []
+        
         for i, el in enumerate(container):
             reply = el.find_element_by_xpath(
                 f'//ytd-comment-thread-renderer[{i + 1}]/div').text
 
             if reply and reply.find(self.channelName) != -1:
                 reply = el.find_element_by_xpath(
-                    f'//ytd-comment-thread-renderer[{i + 1}]/div//div[1]/ytd-button-renderer[1]/a/paper-button'
+                    f'//ytd-comment-thread-renderer[{i + 1}]/div//div[1]/ytd-button-renderer[1]/a/tp-yt-paper-button'
                 )
                 comment = self.getIndividualComment(i + 1, el)
 
                 self.loadNestedReplies(el, reply)
 
                 headings = el.find_elements_by_xpath(
-                    f'//ytd-comment-thread-renderer[{i + 1}]//div/ytd-comment-renderer//div[1]/div[2]/a'
+                    f'//ytd-comment-thread-renderer[{i + 1}]//div/ytd-comment-renderer//div[1]/div[2]/h3/a'
                 )
+
                 replies = el.find_elements_by_xpath(
                     f'//ytd-comment-thread-renderer[{i + 1}]//div/ytd-comment-renderer//ytd-expander/div'
                 )
+
                 result = self.getNestedReplies(headings, replies)
                 all.append({
                     'ch.name': 'Bankai',
                     'comment': comment,
-                    'replies': result
+                    'replies': result if result else ''
                 })
 
         return all
@@ -101,7 +107,7 @@ class Scraper:
 
     def getIndividualComment(self, idx, el):
         result = el.find_element_by_xpath(
-            f'//ytd-comment-thread-renderer[{idx}]/ytd-comment-renderer/div[1]/div[2]/ytd-expander/div'
+            f'//ytd-comment-thread-renderer[{idx}]/ytd-comment-renderer/div[3]/div[2]/ytd-expander/div'
         )
         result = self.driver.execute_script("return arguments[0].textContent",
                                             result)
@@ -116,18 +122,23 @@ class Scraper:
         )
 
         self.channelComments = []
-
+        
         for i, el in enumerate(container):
-            ch = el.find_element_by_xpath(
-                f'//ytd-comment-thread-renderer[{i + 1}]/ytd-comment-renderer/div[1]/div[2]/div[1]/div[2]/a'
-            ).text
+            try:
+                ch = el.find_element_by_xpath(
+                f'//ytd-comment-thread-renderer[{i + 1}]/ytd-comment-renderer//div[2]/h3/a/span'
+                ).text
 
-            if not ch:
-                reply = el.find_element_by_xpath(
-                    f'//ytd-comment-thread-renderer[{i + 1}]/div').text
-                if not reply or reply.find(self.channelName) == -1:
-                    comment = self.getIndividualComment(i + 1, el)
-                    self.channelComments.append((self.channelName, comment))
+                if not ch:
+                    reply = el.find_element_by_xpath(
+                        f'//ytd-comment-thread-renderer[{i + 1}]/div').text
+                    
+                    if not reply or reply.find(self.channelName) == -1:
+                        comment = self.getIndividualComment(i + 1, el)
+                        self.channelComments.append((self.channelName, comment))
+            
+            except NoSuchElementException:
+                pass
 
         if not self.channelComments:
             print(
@@ -135,10 +146,10 @@ class Scraper:
             )
             self.channelComments = None
 
+
     # load the page till end and get all links for the comment
 
     def getLinks(self, commentLength):
-        count = 0
         end = int(commentLength)
         step = 1000
 
@@ -176,8 +187,8 @@ class Scraper:
         commentInfo = self.getCommentInfo()
 
         print('Getting channel name')
-        self.channelName = self.driver.find_element_by_xpath(
-            '//*[@id="text"]/a').text
+        self.channelName = self.driver.find_elements_by_xpath(
+            '//*[@id="text"]/a')[1].text
 
         all = self.getLinks(commentInfo[0])
 

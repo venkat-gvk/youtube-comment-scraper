@@ -19,9 +19,6 @@ if __name__ == '__main__':
     start()
     youtube = Scraper(SEARCH_LINK)
     commentsAndReplies = youtube.run()
-
-    if not commentsAndReplies:
-        sys.exit()
     
     GenerateReport(youtube.channelName, youtube.current_url,
                youtube.channelComments, commentsAndReplies)
